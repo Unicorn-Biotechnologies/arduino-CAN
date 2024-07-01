@@ -1,8 +1,6 @@
 // Copyright (c) Sandeep Mistry. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-#ifndef ARDUINO_ARCH_ESP32
-
 #include "MCP2515.h"
 
 #define REG_BFPCTRL                0x0c
@@ -334,6 +332,10 @@ void MCP2515Class::onReceive(void(*callback)(int))
 
   pinMode(_intPin, INPUT);
 
+// Arduino ESP32 does not have this usingInterrupt functionality (at least currently)
+// So make sure we don't access SPI in this interrupt callback, just set a flag or
+// something as appropriate.
+#ifndef ARDUINO_ARCH_ESP32
   if (callback) {
     SPI.usingInterrupt(digitalPinToInterrupt(_intPin));
     attachInterrupt(digitalPinToInterrupt(_intPin), MCP2515Class::onInterrupt, LOW);
@@ -343,6 +345,7 @@ void MCP2515Class::onReceive(void(*callback)(int))
     SPI.notUsingInterrupt(digitalPinToInterrupt(_intPin));
 #endif
   }
+#endif
 }
 
 int MCP2515Class::filter(int id, int mask)
@@ -711,5 +714,3 @@ void MCP2515Class::onInterrupt()
 }
 
 MCP2515Class CAN;
-
-#endif
