@@ -1,8 +1,6 @@
 // Copyright (c) Sandeep Mistry. All rights reserved.
 // Licensed under the MIT license. See LICENSE file in the project root for full license information.
 
-#ifndef ARDUINO_ARCH_ESP32
-
 #ifndef MCP2515_H
 #define MCP2515_H
 
@@ -16,6 +14,9 @@
 // Arduino MKR board: MKR CAN shield CS is pin 3, INT is pin 7
 #define MCP2515_DEFAULT_CS_PIN          3
 #define MCP2515_DEFAULT_INT_PIN         7
+#elif defined(ARDUINO_ARCH_ESP32)
+#define MCP2515_DEFAULT_CS_PIN          5   // VSPI CS default
+#define MCP2515_DEFAULT_INT_PIN         34  // Input-only pin
 #else
 #define MCP2515_DEFAULT_CS_PIN          10
 #define MCP2515_DEFAULT_INT_PIN         2
@@ -91,7 +92,5 @@ private:
 };
 
 extern MCP2515Class CAN;
-
-#endif
 
 #endif
