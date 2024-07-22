@@ -714,4 +714,4 @@ void MCP2515Class::onInterrupt()
   CAN.handleInterrupt();
 }
 
-MCP2515Class CAN;
+MCP2515Class CAN(SPI);
