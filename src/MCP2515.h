@@ -25,7 +25,7 @@
 class MCP2515Class : public CANControllerClass {
 
 public:
-  MCP2515Class();
+  explicit MCP2515Class(SPIClass& spi);
   virtual ~MCP2515Class();
 
   int begin(long baudRate, bool stayInConfigurationMode);
@@ -86,6 +86,7 @@ private:
 
 private:
   SPISettings _spiSettings;
+  SPIClass* _spi;
   int _csPin;
   int _intPin;
   long _clockFrequency;

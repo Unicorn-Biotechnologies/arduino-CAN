@@ -58,8 +58,9 @@
 #define FLAG_RXM1                  0x40
 
 
-MCP2515Class::MCP2515Class() :
+MCP2515Class::MCP2515Class(SPIClass& spi) :
   CANControllerClass(),
+  _spi(&spi),
   _spiSettings(10E6, MSBFIRST, SPI_MODE0),
   _csPin(MCP2515_DEFAULT_CS_PIN),
   _intPin(MCP2515_DEFAULT_INT_PIN),
@@ -78,7 +79,7 @@ int MCP2515Class::begin(long baudRate, bool stayInConfigurationMode)
   pinMode(_csPin, OUTPUT);
 
   // start SPI
-  SPI.begin();
+  _spi->begin();
 
   reset();
 
@@ -154,7 +155,7 @@ int MCP2515Class::begin(long baudRate, bool stayInConfigurationMode)
 
 void MCP2515Class::end()
 {
-  SPI.end();
+  _spi->end();
 
   CANControllerClass::end();
 }
@@ -199,31 +200,31 @@ int MCP2515Class::endPacket()
     regDLC = _txLength;
   }
 
-  SPI.beginTransaction(_spiSettings);
+  _spi->beginTransaction(_spiSettings);
   digitalWrite(_csPin, LOW);
   // Send the LOAD TX BUFFER instruction to sequentially write registers,
   // starting from TXBnSIDH(n).
-  SPI.transfer(0b01000000 | (n << 1));
-  SPI.transfer(regSIDH);
-  SPI.transfer(regSIDL);
-  SPI.transfer(regEID8);
-  SPI.transfer(regEID0);
-  SPI.transfer(regDLC);
+  _spi->transfer(0b01000000 | (n << 1));
+  _spi->transfer(regSIDH);
+  _spi->transfer(regSIDL);
+  _spi->transfer(regEID8);
+  _spi->transfer(regEID0);
+  _spi->transfer(regDLC);
   if (!_txRtr) {
     for (uint8_t i = 0; i < _txLength; i++) {
-      SPI.transfer(_txData[i]);
+      _spi->transfer(_txData[i]);
     }
   }
   digitalWrite(_csPin, HIGH);
-  SPI.endTransaction();
+  _spi->endTransaction();
 
-  SPI.beginTransaction(_spiSettings);
+  _spi->beginTransaction(_spiSettings);
   digitalWrite(_csPin, LOW);
   // Send the RTS instruction, which sets the TXREQ (TXBnCTRL[3]) bit for the
   // respective buffer, and clears the ABTF, MLOA and TXERR bits.
-  SPI.transfer(0b10000000 | (1 << n));
+  _spi->transfer(0b10000000 | (1 << n));
   digitalWrite(_csPin, HIGH);
-  SPI.endTransaction();
+  _spi->endTransaction();
 
   // Wait until the transmission completes, or gets aborted.
   // Transmission is pending while TXREQ (TXBnCTRL[3]) bit is set.
@@ -255,12 +256,12 @@ int MCP2515Class::endPacket()
 
 int MCP2515Class::parsePacket()
 {
-  SPI.beginTransaction(_spiSettings);
+  _spi->beginTransaction(_spiSettings);
   digitalWrite(_csPin, LOW);
-  SPI.transfer(0xb0);  // RX STATUS
-  uint8_t rxStatus = SPI.transfer(0x00);
+  _spi->transfer(0xb0);  // RX STATUS
+  uint8_t rxStatus = _spi->transfer(0x00);
   digitalWrite(_csPin, HIGH);
-  SPI.endTransaction();
+  _spi->endTransaction();
 
   int n;
   if (rxStatus & 0x40) {
@@ -277,20 +278,20 @@ int MCP2515Class::parsePacket()
     return 0;
   }
 
-  SPI.beginTransaction(_spiSettings);
+  _spi->beginTransaction(_spiSettings);
   digitalWrite(_csPin, LOW);
   // Send READ RX BUFFER instruction to sequentially read registers, starting
   // from RXBnSIDH(n).
-  SPI.transfer(0b10010000 | (n * 0x04));
-  uint8_t regSIDH = SPI.transfer(0x00);
-  uint8_t regSIDL = SPI.transfer(0x00);
+  _spi->transfer(0b10010000 | (n * 0x04));
+  uint8_t regSIDH = _spi->transfer(0x00);
+  uint8_t regSIDL = _spi->transfer(0x00);
   _rxExtended = (regSIDL & FLAG_IDE) ? true : false;
 
   // We could just skip the extended registers for standard frames, but that
   // would actually add more overhead, and increase complexity.
-  uint8_t regEID8 = SPI.transfer(0x00);
-  uint8_t regEID0 = SPI.transfer(0x00);
-  uint8_t regDLC = SPI.transfer(0x00);
+  uint8_t regEID8 = _spi->transfer(0x00);
+  uint8_t regEID0 = _spi->transfer(0x00);
+  uint8_t regDLC = _spi->transfer(0x00);
   uint32_t idA = (regSIDH << 3) | (regSIDL >> 5);
   if (_rxExtended) {
     uint32_t idB =
@@ -315,14 +316,14 @@ int MCP2515Class::parsePacket()
 
     // Get the data.
     for (uint8_t i = 0; i < _rxLength; i++) {
-      _rxData[i] = SPI.transfer(0x00);
+      _rxData[i] = _spi->transfer(0x00);
     }
   }
 
   // Don't need to unset the RXnIF(n) flag as this is done automatically when
   // setting the CS high after a READ RX BUFFER instruction.
   digitalWrite(_csPin, HIGH);
-  SPI.endTransaction();
+  _spi->endTransaction();
   return _rxDlc;
 }
 
@@ -337,12 +338,12 @@ void MCP2515Class::onReceive(void(*callback)(int))
 // something as appropriate.
 #ifndef ARDUINO_ARCH_ESP32
   if (callback) {
-    SPI.usingInterrupt(digitalPinToInterrupt(_intPin));
+    _spi->usingInterrupt(digitalPinToInterrupt(_intPin));
     attachInterrupt(digitalPinToInterrupt(_intPin), MCP2515Class::onInterrupt, LOW);
   } else {
     detachInterrupt(digitalPinToInterrupt(_intPin));
 #ifdef SPI_HAS_NOTUSINGINTERRUPT
-    SPI.notUsingInterrupt(digitalPinToInterrupt(_intPin));
+    _spi->notUsingInterrupt(digitalPinToInterrupt(_intPin));
 #endif
   }
 #endif
@@ -642,11 +643,11 @@ void MCP2515Class::dumpRegisters(Stream& out)
 
 void MCP2515Class::reset()
 {
-  SPI.beginTransaction(_spiSettings);
+  _spi->beginTransaction(_spiSettings);
   digitalWrite(_csPin, LOW);
-  SPI.transfer(0xc0);
+  _spi->transfer(0xc0);
   digitalWrite(_csPin, HIGH);
-  SPI.endTransaction();
+  _spi->endTransaction();
 
   // From the data sheet:
   // The OST keeps the device in a Reset state for 128 OSC1 clock cycles after
@@ -674,38 +675,38 @@ uint8_t MCP2515Class::readRegister(uint8_t address)
 {
   uint8_t value;
 
-  SPI.beginTransaction(_spiSettings);
+  _spi->beginTransaction(_spiSettings);
   digitalWrite(_csPin, LOW);
-  SPI.transfer(0x03);
-  SPI.transfer(address);
-  value = SPI.transfer(0x00);
+  _spi->transfer(0x03);
+  _spi->transfer(address);
+  value = _spi->transfer(0x00);
   digitalWrite(_csPin, HIGH);
-  SPI.endTransaction();
+  _spi->endTransaction();
 
   return value;
 }
 
 void MCP2515Class::modifyRegister(uint8_t address, uint8_t mask, uint8_t value)
 {
-  SPI.beginTransaction(_spiSettings);
+  _spi->beginTransaction(_spiSettings);
   digitalWrite(_csPin, LOW);
-  SPI.transfer(0x05);
-  SPI.transfer(address);
-  SPI.transfer(mask);
-  SPI.transfer(value);
+  _spi->transfer(0x05);
+  _spi->transfer(address);
+  _spi->transfer(mask);
+  _spi->transfer(value);
   digitalWrite(_csPin, HIGH);
-  SPI.endTransaction();
+  _spi->endTransaction();
 }
 
 void MCP2515Class::writeRegister(uint8_t address, uint8_t value)
 {
-  SPI.beginTransaction(_spiSettings);
+  _spi->beginTransaction(_spiSettings);
   digitalWrite(_csPin, LOW);
-  SPI.transfer(0x02);
-  SPI.transfer(address);
-  SPI.transfer(value);
+  _spi->transfer(0x02);
+  _spi->transfer(address);
+  _spi->transfer(value);
   digitalWrite(_csPin, HIGH);
-  SPI.endTransaction();
+  _spi->endTransaction();
 }
 
 void MCP2515Class::onInterrupt()
