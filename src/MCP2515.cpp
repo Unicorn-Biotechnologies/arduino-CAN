@@ -3,59 +3,66 @@
 
 #include "MCP2515.h"
 
-#define REG_BFPCTRL                0x0c
-#define REG_TXRTSCTRL              0x0d
+// SPI quick instructions: DS20005282C-page 55
+constexpr uint8_t WRITE          {0x02};
+constexpr uint8_t READ           {0x03};
+constexpr uint8_t BIT_MODIFY     {0x05};
+constexpr uint8_t READ_RX_BUFFER {0x90};
+constexpr uint8_t RX_STATUS      {0xB0};
 
-#define REG_CANCTRL                0x0f
+constexpr uint8_t REG_BFPCTRL    {0x0c};
+constexpr uint8_t REG_TXRTSCTRL  {0x0d};
 
-#define REG_CNF3                   0x28
-#define REG_CNF2                   0x29
-#define REG_CNF1                   0x2a
+constexpr uint8_t REG_CANCTRL    {0x0f};
 
-#define REG_CANINTE                0x2b
+constexpr uint8_t REG_CNF3       {0x28};
+constexpr uint8_t REG_CNF2       {0x29};
+constexpr uint8_t REG_CNF1       {0x2a};
+
+constexpr uint8_t REG_CANINTE    {0x2b};
 
 // Whenever changing the CANINTF register, use BIT MODIFY instead of WRITE.
-#define REG_CANINTF                0x2c
+constexpr uint8_t REG_CANINTF   {0x2c};
 
-#define FLAG_RXnIE(n)              (0x01 << n)
-#define FLAG_RXnIF(n)              (0x01 << n)
-#define FLAG_TXnIF(n)              (0x04 << n)
+constexpr uint8_t FLAG_RXnIE(uint8_t n)   { return (0x01 << n); }
+constexpr uint8_t FLAG_RXnIF(uint8_t n)   { return (0x01 << n); }
+constexpr uint8_t FLAG_TXnIF(uint8_t n)   { return (0x04 << n); }
 
 // There is a 4-register gap between RXF2EID0 and RXF3SIDH.
-#define REG_RXFnSIDH(n)            (0x00 + ((n + (n >= 3)) * 4))
-#define REG_RXFnSIDL(n)            (0x01 + ((n + (n >= 3)) * 4))
-#define REG_RXFnEID8(n)            (0x02 + ((n + (n >= 3)) * 4))
-#define REG_RXFnEID0(n)            (0x03 + ((n + (n >= 3)) * 4))
+constexpr uint8_t REG_RXFnSIDH(uint8_t n) { return (0x00 + ((n + (n >= 3)) * 4)); }
+constexpr uint8_t REG_RXFnSIDL(uint8_t n) { return (0x01 + ((n + (n >= 3)) * 4)); }
+constexpr uint8_t REG_RXFnEID8(uint8_t n) { return (0x02 + ((n + (n >= 3)) * 4)); }
+constexpr uint8_t REG_RXFnEID0(uint8_t n) { return (0x03 + ((n + (n >= 3)) * 4)); }
 
-#define REG_RXMnSIDH(n)            (0x20 + (n * 0x04))
-#define REG_RXMnSIDL(n)            (0x21 + (n * 0x04))
-#define REG_RXMnEID8(n)            (0x22 + (n * 0x04))
-#define REG_RXMnEID0(n)            (0x23 + (n * 0x04))
+constexpr uint8_t REG_RXMnSIDH(uint8_t n) { return (0x20 + (n * 0x04)); }
+constexpr uint8_t REG_RXMnSIDL(uint8_t n) { return (0x21 + (n * 0x04)); }
+constexpr uint8_t REG_RXMnEID8(uint8_t n) { return (0x22 + (n * 0x04)); }
+constexpr uint8_t REG_RXMnEID0(uint8_t n) { return (0x23 + (n * 0x04)); }
 
-#define REG_TXBnCTRL(n)            (0x30 + (n * 0x10))
-#define REG_TXBnSIDH(n)            (0x31 + (n * 0x10))
-#define REG_TXBnSIDL(n)            (0x32 + (n * 0x10))
-#define REG_TXBnEID8(n)            (0x33 + (n * 0x10))
-#define REG_TXBnEID0(n)            (0x34 + (n * 0x10))
-#define REG_TXBnDLC(n)             (0x35 + (n * 0x10))
-#define REG_TXBnD0(n)              (0x36 + (n * 0x10))
+constexpr uint8_t REG_TXBnCTRL(uint8_t n) { return (0x30 + (n * 0x10)); }
+constexpr uint8_t REG_TXBnSIDH(uint8_t n) { return (0x31 + (n * 0x10)); }
+constexpr uint8_t REG_TXBnSIDL(uint8_t n) { return (0x32 + (n * 0x10)); }
+constexpr uint8_t REG_TXBnEID8(uint8_t n) { return (0x33 + (n * 0x10)); }
+constexpr uint8_t REG_TXBnEID0(uint8_t n) { return (0x34 + (n * 0x10)); }
+constexpr uint8_t REG_TXBnDLC(uint8_t n)  { return (0x35 + (n * 0x10)); }
+constexpr uint8_t REG_TXBnD0(uint8_t n)   { return (0x36 + (n * 0x10)); }
 
-#define REG_RXBnCTRL(n)            (0x60 + (n * 0x10))
-#define REG_RXBnSIDH(n)            (0x61 + (n * 0x10))
-#define REG_RXBnSIDL(n)            (0x62 + (n * 0x10))
-#define REG_RXBnEID8(n)            (0x63 + (n * 0x10))
-#define REG_RXBnEID0(n)            (0x64 + (n * 0x10))
-#define REG_RXBnDLC(n)             (0x65 + (n * 0x10))
-#define REG_RXBnD0(n)              (0x66 + (n * 0x10))
+constexpr uint8_t REG_RXBnCTRL(uint8_t n) { return (0x60 + (n * 0x10)); }
+constexpr uint8_t REG_RXBnSIDH(uint8_t n) { return (0x61 + (n * 0x10)); }
+constexpr uint8_t REG_RXBnSIDL(uint8_t n) { return (0x62 + (n * 0x10)); }
+constexpr uint8_t REG_RXBnEID8(uint8_t n) { return (0x63 + (n * 0x10)); }
+constexpr uint8_t REG_RXBnEID0(uint8_t n) { return (0x64 + (n * 0x10)); }
+constexpr uint8_t REG_RXBnDLC(uint8_t n)  { return (0x65 + (n * 0x10)); }
+constexpr uint8_t REG_RXBnD0(uint8_t n)   { return (0x66 + (n * 0x10)); }
 
-#define FLAG_IDE                   0x08
-#define FLAG_SRR                   0x10
-#define FLAG_RTR                   0x40
-#define FLAG_EXIDE                 0x08
-#define FLAG_RXB0CTRL_BUKT         0x04
+constexpr uint8_t FLAG_IDE           {0x08};
+constexpr uint8_t FLAG_SRR           {0x10};
+constexpr uint8_t FLAG_RTR           {0x40};
+constexpr uint8_t FLAG_EXIDE         {0x08};
+constexpr uint8_t FLAG_RXB0CTRL_BUKT {0x04};
 
-#define FLAG_RXM0                  0x20
-#define FLAG_RXM1                  0x40
+constexpr uint8_t FLAG_RXM0          {0x20};
+constexpr uint8_t FLAG_RXM1          {0x40};
 
 
 MCP2515Class::MCP2515Class(SPIClass& spi) :
@@ -136,6 +143,7 @@ int MCP2515Class::begin(long baudRate, bool stayInConfigurationMode)
   writeRegister(REG_CNF2, cnf[1]);
   writeRegister(REG_CNF3, cnf[2]);
 
+  // Enable interrupts on both RX buffers
   writeRegister(REG_CANINTE, FLAG_RXnIE(1) | FLAG_RXnIE(0));
   writeRegister(REG_BFPCTRL, 0x00);
   writeRegister(REG_TXRTSCTRL, 0x00);
@@ -258,7 +266,7 @@ int MCP2515Class::parsePacket()
 {
   _spi->beginTransaction(_spiSettings);
   digitalWrite(_csPin, LOW);
-  _spi->transfer(0xb0);  // RX STATUS
+  _spi->transfer(RX_STATUS);
   uint8_t rxStatus = _spi->transfer(0x00);
   digitalWrite(_csPin, HIGH);
   _spi->endTransaction();
@@ -282,7 +290,7 @@ int MCP2515Class::parsePacket()
   digitalWrite(_csPin, LOW);
   // Send READ RX BUFFER instruction to sequentially read registers, starting
   // from RXBnSIDH(n).
-  _spi->transfer(0b10010000 | (n * 0x04));
+  _spi->transfer(READ_RX_BUFFER | (n * 0x04));
   uint8_t regSIDH = _spi->transfer(0x00);
   uint8_t regSIDL = _spi->transfer(0x00);
   _rxExtended = (regSIDL & FLAG_IDE) ? true : false;
@@ -324,6 +332,8 @@ int MCP2515Class::parsePacket()
   // setting the CS high after a READ RX BUFFER instruction.
   digitalWrite(_csPin, HIGH);
   _spi->endTransaction();
+
+  clearRxInterruptFlag(n);
   return _rxDlc;
 }
 
@@ -677,7 +687,7 @@ uint8_t MCP2515Class::readRegister(uint8_t address)
 
   _spi->beginTransaction(_spiSettings);
   digitalWrite(_csPin, LOW);
-  _spi->transfer(0x03);
+  _spi->transfer(READ);
   _spi->transfer(address);
   value = _spi->transfer(0x00);
   digitalWrite(_csPin, HIGH);
@@ -686,11 +696,18 @@ uint8_t MCP2515Class::readRegister(uint8_t address)
   return value;
 }
 
+void MCP2515Class::clearRxInterruptFlag(uint8_t n) {
+    uint8_t mask{FLAG_RXnIF(n)};
+    constexpr uint8_t clear_command{0x00};
+
+    modifyRegister(REG_CANINTF, mask, clear_command);
+}
+
 void MCP2515Class::modifyRegister(uint8_t address, uint8_t mask, uint8_t value)
 {
   _spi->beginTransaction(_spiSettings);
   digitalWrite(_csPin, LOW);
-  _spi->transfer(0x05);
+  _spi->transfer(BIT_MODIFY);
   _spi->transfer(address);
   _spi->transfer(mask);
   _spi->transfer(value);
@@ -702,7 +719,7 @@ void MCP2515Class::writeRegister(uint8_t address, uint8_t value)
 {
   _spi->beginTransaction(_spiSettings);
   digitalWrite(_csPin, LOW);
-  _spi->transfer(0x02);
+  _spi->transfer(WRITE);
   _spi->transfer(address);
   _spi->transfer(value);
   digitalWrite(_csPin, HIGH);
