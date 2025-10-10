@@ -69,6 +69,7 @@ public:
   void setPins(int cs = MCP2515_DEFAULT_CS_PIN, int irq = MCP2515_DEFAULT_INT_PIN);
   void setSPIFrequency(uint32_t frequency);
   void setClockFrequency(long clockFrequency);
+  void setTxTimeout(unsigned timeout);
 
   void dumpImportantRegisters(Stream& out);
   void dumpRegisters(Stream& out);
@@ -90,6 +91,7 @@ private:
   int _csPin;
   int _intPin;
   long _clockFrequency;
+  unsigned _tx_response_timeout;  // Time to response from MCP
 };
 
 extern MCP2515Class CAN;

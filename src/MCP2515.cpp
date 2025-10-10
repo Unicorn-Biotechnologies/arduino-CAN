@@ -64,7 +64,8 @@ MCP2515Class::MCP2515Class(SPIClass& spi) :
   _spiSettings(10E6, MSBFIRST, SPI_MODE0),
   _csPin(MCP2515_DEFAULT_CS_PIN),
   _intPin(MCP2515_DEFAULT_INT_PIN),
-  _clockFrequency(MCP2515_DEFAULT_CLOCK_FREQUENCY)
+  _clockFrequency(MCP2515_DEFAULT_CLOCK_FREQUENCY),
+  _tx_response_timeout(50)
 {
 }
 
@@ -229,9 +230,18 @@ int MCP2515Class::endPacket()
   // Wait until the transmission completes, or gets aborted.
   // Transmission is pending while TXREQ (TXBnCTRL[3]) bit is set.
   bool aborted = false;
+  unsigned start_time_ms = millis();
   while (readRegister(REG_TXBnCTRL(n)) & 0x08) {
     // Read the TXERR (TXBnCTRL[4]) bit to check for errors.
     if (readRegister(REG_TXBnCTRL(n)) & 0x10) {
+      // Abort on errors by setting the ABAT bit. The MCP2515 will should the
+      // TXREQ bit shortly. We'll keep running the loop until TXREQ is cleared.
+      modifyRegister(REG_CANCTRL, 0x10, 0x10);
+      aborted = true;
+    }
+
+    // Check for timeout
+    if (millis() - start_time_ms > _tx_response_timeout) {
       // Abort on errors by setting the ABAT bit. The MCP2515 will should the
       // TXREQ bit shortly. We'll keep running the loop until TXREQ is cleared.
       modifyRegister(REG_CANCTRL, 0x10, 0x10);
@@ -555,6 +565,11 @@ void MCP2515Class::setClockFrequency(long clockFrequency)
 {
   _clockFrequency = clockFrequency;
 }
+
+void MCP2515Class::setTxTimeout(unsigned timeout) {
+  _tx_response_timeout = timeout;
+}
+
 
 void MCP2515Class::dumpImportantRegisters(Stream& out) {
   out.print("TEC: ");
