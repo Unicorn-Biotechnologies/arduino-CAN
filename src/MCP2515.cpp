@@ -141,7 +141,8 @@ int MCP2515Class::begin(long baudRate, bool stayInConfigurationMode)
   writeRegister(REG_TXRTSCTRL, 0x00);
 
   // A combination of RXM1 and RXM0 is "Turns mask/filters off; receives any message".
-  writeRegister(REG_RXBnCTRL(0), FLAG_RXM1 | FLAG_RXM0);
+  // BUKT enabled to allow rollover of received messages from RX0 into RX1 (small HW buffer)
+  writeRegister(REG_RXBnCTRL(0), FLAG_RXM1 | FLAG_RXM0 | FLAG_RXB0CTRL_BUKT);
   writeRegister(REG_RXBnCTRL(1), FLAG_RXM1 | FLAG_RXM0);
 
   if (!stayInConfigurationMode) {
